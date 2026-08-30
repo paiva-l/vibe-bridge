@@ -93,3 +93,6 @@ Com base no processamento do arquivo `dataset_tratado.csv` (**80.583 faixas** do
    ```bash
    git clone [https://github.com/SEU_USUARIO/vibe-bridge.git](https://github.com/SEU_USUARIO/vibe-bridge.git)
    cd vibe-bridge
+
+## 📚 Especificação Técnica
+* Para conferir a formulação matemática, o modelo vetorial e os pseudocódigos do algoritmo, acesse a [Especificação Técnica Completa](./vibe-bridge-especificacao.md).
