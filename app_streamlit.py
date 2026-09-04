@@ -11,7 +11,7 @@ st.sidebar.header("Configurações")
 qtd_recomendacoes = st.sidebar.slider("Quantidade de Recomendações", 1, 10, 5)
 
 st.title("🎵 Vibe Bridge: Motor de Recomendação Acústica")
-st.write("Encontre músicas semelhantes com base nas características acústicas e ouça a prévia direto no Spotify!")
+st.write("Encontre músicas semelhantes e ouça a prévia diretamente nos botões abaixo!")
 
 # 1. Carregamento Otimizado do Dataset Real
 @st.cache_data
@@ -21,14 +21,17 @@ def carregar_dados():
 
 df = carregar_dados()
 
-# Identificar colunas de nome e artista de forma flexível
+# Identificar colunas de forma flexível
 col_nome = next((c for c in ['nome', 'track_name', 'name'] if c in df.columns), df.columns[0])
 col_artista = next((c for c in ['artista', 'artist_name', 'artists'] if c in df.columns), df.columns[1])
+col_id = next((c for c in ['id', 'track_id', 'spotify_id'] if c in df.columns), None)
+col_preview = next((c for c in ['preview_url', 'preview', 'audio_preview'] if c in df.columns), None)
+
 if 'spotify_url' not in df.columns:
     df['spotify_url'] = "https://open.spotify.com"
 
 # 2. Barra de Busca e Seleção de Seed
-termo_busca = st.text_input("Busque por uma música ou artista no Spotify:", "Justin")
+termo_busca = st.text_input("Busque por uma música ou artista:", "Justin")
 
 df_filtrado = df[
     df[col_nome].astype(str).str.contains(termo_busca, case=False, na=False) | 
@@ -39,7 +42,6 @@ if df_filtrado.empty:
     df_filtrado = df.head(100)
 
 opcoes_musicas = [f"{row[col_nome]} - {row[col_artista]}" for _, row in df_filtrado.iterrows()]
-
 seed_selecionada = st.selectbox("Selecione a música de referência (Seed):", opcoes_musicas)
 
 gerar = st.button("Gerar Recomendações Acústicas 🎵")
@@ -49,12 +51,10 @@ if gerar or 'recomendadas' in st.session_state:
         idx_seed = opcoes_musicas.index(seed_selecionada)
         original_idx = df_filtrado.index[idx_seed]
         
-        # Seleciona features numéricas ignorando identificadores
         audio_cols = df.select_dtypes(include=[np.number]).columns.tolist()
         scaler = MinMaxScaler()
         features_scaled = scaler.fit_transform(df[audio_cols])
         
-        # Uso de NearestNeighbors para evitar estouro de memória
         nbrs = NearestNeighbors(n_neighbors=qtd_recomendacoes + 1, metric='cosine').fit(features_scaled)
         distances, indices = nbrs.kneighbors(features_scaled[original_idx].reshape(1, -1))
         
@@ -67,7 +67,6 @@ if gerar or 'recomendadas' in st.session_state:
     seed_row = df.iloc[st.session_state.seed_idx]
     st.markdown("---")
     st.markdown(f"### ✨ Recomendações baseadas em: {seed_row[col_nome]} ({seed_row[col_artista]})")
-    st.markdown(f"🔗 [Ouvir música de referência no Spotify]({seed_row['spotify_url']})")
     
     st.markdown("### 🎧 Top Recomendações:")
     
@@ -79,19 +78,37 @@ if gerar or 'recomendadas' in st.session_state:
             st.markdown(f"**{i+1}. {rec_row[col_nome]} — {rec_row[col_artista]}**")
             st.text(f"Grau de Afinidade Acústica: {round(np.random.uniform(0.88, 0.99), 2)}")
             
-            # Incorporação do Player Oficial do Spotify (iframe)
-            url_spotify = str(rec_row['spotify_url'])
-            if 'track/' in url_spotify:
-                try:
-                    track_id = url_spotify.split('track/')[1].split('?')[0]
+            # 1. Tenta reproduzir pelo player de áudio nativo se houver preview_url no dataset
+            tem_audio_nativo = False
+            if col_preview and pd.notna(rec_row[col_preview]):
+                url_prev = str(rec_row[col_preview])
+                if url_prev.startswith('http'):
+                    try:
+                        st.audio(url_prev)
+                        tem_audio_nativo = True
+                    except:
+                        pass
+            
+            # 2. Se não houver áudio nativo, tenta renderizar o player do Spotify via iframe
+            if not tem_audio_nativo:
+                track_id = None
+                if col_id and pd.notna(rec_row[col_id]):
+                    track_id = str(rec_row[col_id])
+                else:
+                    url_spotify = str(rec_row['spotify_url'])
+                    if 'track/' in url_spotify:
+                        try:
+                            track_id = url_spotify.split('track/')[1].split('?')[0]
+                        except:
+                            pass
+                
+                if track_id:
                     st.markdown(
                         f'''<iframe src="https://open.spotify.com/embed/track/{track_id}?utm_source=generator" width="100%" height="80" frameBorder="0" allowfullscreen="" allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"></iframe>''',
                         unsafe_allow_html=True
                     )
-                except:
-                    st.markdown(f"[▶️ Abrir no Spotify]({url_spotify})")
-            else:
-                st.markdown(f"[▶️ Abrir no Spotify]({url_spotify})")
+                else:
+                    st.markdown(f"[▶️ Ouvir no Spotify](https://open.spotify.com/search/{rec_row[col_nome]}%20{rec_row[col_artista]})")
         
         with col_btn:
             b1, b2 = st.columns(2)
