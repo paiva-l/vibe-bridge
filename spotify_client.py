@@ -33,6 +33,7 @@ def obter_recomendacoes(seed_track_id, limit=5):
         # Pega os dados da música e do artista de referência
         seed_track = sp.track(seed_track_id)
         artista_obj = seed_track['artists'][0]
+        nome_artista = artista_obj['name']
         artista_info = sp.artist(artista_obj['id'])
         
         # Pega os gêneros associados ao artista no Spotify
@@ -40,36 +41,49 @@ def obter_recomendacoes(seed_track_id, limit=5):
         
         tracks_formatadas = []
         
+        # Cria buscas dinâmicas combinando o gênero e o artista de referência para evitar repetições
+        queries_possiveis = []
         if generos:
-            # Pega o primeiro gênero principal para usar como filtro (corrigido com f-string)
             genero_principal = generos[0]
-            query_busca = f"genre:{genero_principal} indie"
-            resultado_busca = sp.search(q=query_busca, limit=limit + 5, type='track')
+            queries_possiveis = [
+                f"genre:{genero_principal} indie",
+                f"artist:{nome_artista} alternative",
+                f"genre:{genero_principal} discovery"
+            ]
         else:
-            # Fallback caso o artista não tenha gênero cadastrado
-            resultado_busca = sp.search(q="indie alternative discovery", limit=limit + 5, type='track')
+            queries_possiveis = [
+                f"artist:{nome_artista} discovery",
+                "indie alternative discovery",
+                "hidden gems underground"
+            ]
         
-        for item in resultado_busca['tracks']['items']:
-            # Evita duplicar a música seed ou o mesmo artista principal na lista
-            if item['id'] != seed_track_id and item['artists'][0]['id'] != artista_obj['id']:
-                tracks_formatadas.append({
-                    'name': item['name'],
-                    'artists': item['artists'],
-                    'external_urls': item['external_urls'],
-                    'preview_url': item.get('preview_url'), # <- Garante que a prévia é capturada
-                    'similarity_score': 0.92
-                })
+        # Executa as buscas dinâmicas para povoar as recomendações
+        for q_query in queries_possiveis:
+            if len(tracks_formatadas) >= limit + 5:
+                break
+            resultado_busca = sp.search(q=q_query, limit=10, type='track')
+            for item in resultado_busca['tracks']['items']:
+                # Evita duplicar a música seed, o mesmo artista principal ou músicas repetidas na lista
+                if item['id'] != seed_track_id and item['artists'][0]['id'] != artista_obj['id']:
+                    if not any(t['name'] == item['name'] for t in tracks_formatadas):
+                        tracks_formatadas.append({
+                            'name': item['name'],
+                            'artists': item['artists'],
+                            'external_urls': item['external_urls'],
+                            'preview_url': item.get('preview_url'),
+                            'similarity_score': 0.92
+                        })
         
-        # Se por acaso a busca estrita trouxer poucos itens, faz uma busca complementar por estilo alternativo
+        # Se por acaso a busca estrita trouxer poucos itens, faz uma busca complementar de fallback
         if len(tracks_formatadas) < limit:
-            busca_extra = sp.search(q="indie hidden gems discovery", limit=limit, type='track')
+            busca_extra = sp.search(q=f"indie hidden gems {nome_artista}", limit=limit + 5, type='track')
             for item in busca_extra['tracks']['items']:
                 if item['id'] != seed_track_id and not any(t['name'] == item['name'] for t in tracks_formatadas):
                     tracks_formatadas.append({
                         'name': item['name'],
                         'artists': item['artists'],
                         'external_urls': item['external_urls'],
-                        'preview_url': item.get('preview_url'), # <- É aqui dentro que ele entra!
+                        'preview_url': item.get('preview_url'),
                         'similarity_score': 0.88
                     })
         
