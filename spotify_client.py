@@ -17,7 +17,6 @@ def get_spotify_client():
         st.error(f"Erro na autenticação com o Spotify: {e}")
         return None
 
-# Instancia o cliente globalmente
 sp = get_spotify_client()
 
 def buscar_musica(q, limit=10):
@@ -25,19 +24,20 @@ def buscar_musica(q, limit=10):
         return {"tracks": {"items": []}}
     return sp.search(q=q, limit=limit, type='track')
 
-def obter_recomendacoes(seed_track_id, limit=5, feedback_context=None):
+# Usando **kwargs para blindar contra qualquer divergência de argumentos
+def obter_recomendacoes(seed_track_id, limit=5, **kwargs):
     if not sp:
         return None
     
     try:
-        # Pega os dados da música e do artista de referência
+        feedback_context = kwargs.get('feedback_context', None)
+        
         seed_track = sp.track(seed_track_id)
         artista_obj = seed_track['artists'][0]
         nome_artista = artista_obj['name']
         
         tracks_formatadas = []
         
-        # Cria buscas focadas em diversidade de estilo e artista (evitando duplicar o título da seed)
         queries_possiveis = [
             f"artist:{nome_artista} album",
             f"{nome_artista} live OR remix OR acoustic",
@@ -45,12 +45,10 @@ def obter_recomendacoes(seed_track_id, limit=5, feedback_context=None):
             "indie rock discovery underground"
         ]
         
-        # Se houver feedback de artistas curtidos, prioriza eles nas buscas
         if feedback_context:
             for artist_curtido in feedback_context:
                 queries_possiveis.insert(0, f"artist:{artist_curtido}")
 
-        # Executa as buscas para povoar as recomendações de forma variada
         for q_query in queries_possiveis:
             if len(tracks_formatadas) >= limit + 5:
                 break
@@ -58,8 +56,6 @@ def obter_recomendacoes(seed_track_id, limit=5, feedback_context=None):
                 resultado_busca = sp.search(q=q_query, limit=10, type='track')
                 items = resultado_busca.get('tracks', {}).get('items', [])
                 for item in items:
-                    # Evita duplicar a música seed, o mesmo artista principal, 
-                    # e barra títulos repetidos comparando em letras minúsculas
                     if item['id'] != seed_track_id and item['artists'][0]['id'] != artista_obj['id']:
                         if not any(t['name'].lower() == item['name'].lower() for t in tracks_formatadas):
                             tracks_formatadas.append({
@@ -72,7 +68,6 @@ def obter_recomendacoes(seed_track_id, limit=5, feedback_context=None):
             except Exception:
                 continue
         
-        # Se a busca dinâmica trouxer poucos itens, faz um fallback complementar
         if len(tracks_formatadas) < limit:
             try:
                 busca_extra = sp.search(q=f"artist:{nome_artista}", limit=limit + 5, type='track')
@@ -88,7 +83,6 @@ def obter_recomendacoes(seed_track_id, limit=5, feedback_context=None):
             except Exception:
                 pass
         
-        # Limita à quantidade exata solicitada
         tracks_formatadas = tracks_formatadas[:limit]
         
         return {
@@ -96,5 +90,5 @@ def obter_recomendacoes(seed_track_id, limit=5, feedback_context=None):
             "tracks": tracks_formatadas
         }
     except Exception as e:
-        st.error(f"Erro ao gerar recomendações independentes: {e}")
+        st.error(f"Erro ao gerar recomendações: {e}")
         return None
