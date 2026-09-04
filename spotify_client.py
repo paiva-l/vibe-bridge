@@ -25,7 +25,7 @@ def buscar_musica(q, limit=10):
         return {"tracks": {"items": []}}
     return sp.search(q=q, limit=limit, type='track')
 
-def obter_recomendacoes(seed_track_id, limit=5):
+def obter_recomendacoes(seed_track_id, limit=5, feedback_context=None):
     if not sp:
         return None
     
@@ -45,6 +45,11 @@ def obter_recomendacoes(seed_track_id, limit=5):
             "indie rock discovery underground"
         ]
         
+        # Se houver feedback de artistas curtidos, prioriza eles nas buscas
+        if feedback_context:
+            for artist_curtido in feedback_context:
+                queries_possiveis.insert(0, f"artist:{artist_curtido}")
+
         # Executa as buscas para povoar as recomendações de forma variada
         for q_query in queries_possiveis:
             if len(tracks_formatadas) >= limit + 5:
