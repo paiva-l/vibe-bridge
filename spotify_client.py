@@ -56,6 +56,7 @@ def obter_recomendacoes(seed_track_id, limit=5):
                     'name': item['name'],
                     'artists': item['artists'],
                     'external_urls': item['external_urls'],
+                    'preview_url': item.get('preview_url'), # <- Garante que a prévia é capturada
                     'similarity_score': 0.92
                 })
         
@@ -68,6 +69,7 @@ def obter_recomendacoes(seed_track_id, limit=5):
                         'name': item['name'],
                         'artists': item['artists'],
                         'external_urls': item['external_urls'],
+                        'preview_url': item.get('preview_url'), # <- É aqui dentro que ele entra!
                         'similarity_score': 0.88
                     })
         
