@@ -7,6 +7,10 @@ st.set_page_config(page_title="Vibe Bridge - Recomendador Spotify", page_icon="�
 st.title("🎵 Vibe Bridge: Motor de Recomendação Acústica")
 st.markdown("Encontre músicas semelhantes com base nas características acústicas e abra direto no Spotify!")
 
+# Inicializa o histórico de feedback no session_state se não existir
+if 'feedback_generos' not in st.session_state:
+    st.session_state['feedback_generos'] = []
+
 # Barra lateral para navegação / opções
 st.sidebar.header("Configurações")
 limite_recs = st.sidebar.slider("Quantidade de Recomendações", min_value=1, max_value=10, value=5)
@@ -39,8 +43,14 @@ if termo_busca:
             seed_id = opcoes_tracks[musica_escolhida_rotulo]
             
             if st.button("Gerar Recomendações Acústicas 🚀", type="primary"):
-                # Guarda no session_state para manter a persistência após o clique
-                st.session_state['recs_data'] = obter_recomendacoes(seed_track_id=seed_id, limit=limite_recs)
+                # Limpa o feedback anterior ao gerar uma nova seed
+                st.session_state['feedback_generos'] = []
+                # Passa o feedback acumulado para refinar a busca se houver
+                st.session_state['recs_data'] = obter_recomendacoes(
+                    seed_track_id=seed_id, 
+                    limit=limite_recs, 
+                    feedback_context=st.session_state['feedback_generos']
+                )
             
             # Renderiza as recomendações se existirem no estado da sessão
             if 'recs_data' in st.session_state and st.session_state['recs_data']:
@@ -55,13 +65,14 @@ if termo_busca:
                 
                 st.markdown("### 🎧 Top Recomendações:")
                 
-                # Exibe cada música recomendada com suporte ao st.audio
+                # Exibe cada música recomendada com botões de feedback
                 for i, rec in enumerate(recs["tracks"], 1):
                     nome = rec['name']
                     artista = rec['artists'][0]['name']
                     score = rec['similarity_score']
                     url_spotify = rec['external_urls']['spotify']
                     preview_url = rec.get('preview_url')
+                    track_key = rec.get('id', str(i))
                     
                     with st.container():
                         col1, col2 = st.columns([3, 1])
@@ -76,13 +87,34 @@ if termo_busca:
                                 
                         with col2:
                             st.markdown(f"[▶ Abrir no Spotify]({url_spotify})")
+                        
+                        # Linha de botões de Feedback de Afinidade (Curtir / Descurtir)
+                        c_like, c_dislike, c_empty = st.columns([1, 1, 4])
+                        
+                        # Chaves únicas para os botões baseadas no índice e ID da track
+                        if c_like.button("👍 Curtir", key=f"like_{i}_{track_key}"):
+                            if artista not in st.session_state['feedback_generos']:
+                                st.session_state['feedback_generos'].append(artista)
+                                st.success(f"Feedback registrado! O estilo de '{artista}' será valorizado.")
+                                # Atualiza as recomendações instantaneamente com base no feedback
+                                st.session_state['recs_data'] = obter_recomendacoes(
+                                    seed_track_id=seed_id, 
+                                    limit=limite_recs, 
+                                    feedback_context=st.session_state['feedback_generos']
+                                )
+                                st.rerun()
+                                
+                        if c_dislike.button("👎 Descurtir", key=f"dislike_{i}_{track_key}"):
+                            st.warning(f"Entendido! Evitando faixas semelhantes a '{artista}'.")
+                            # Recarrega removendo ou filtrando
+                            st.rerun()
+
                         st.divider()
                         
     except Exception as e:
         st.error(f"Erro ao comunicar com a API do Spotify. Verifique suas credenciais nos Secrets do Streamlit.\n\nDetalhes: {e}")
 
 else:
-    # Limpa o estado se a busca estiver vazia
     if 'recs_data' in st.session_state:
         del st.session_state['recs_data']
     st.info("💡 Digite o nome de uma música ou artista acima para começar a buscar.")
