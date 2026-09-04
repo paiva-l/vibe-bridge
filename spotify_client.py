@@ -32,60 +32,56 @@ def obter_recomendacoes(seed_track_id, limit=5):
     try:
         # Pega os dados da música e do artista de referência
         seed_track = sp.track(seed_track_id)
+        nome_seed = seed_track['name']
         artista_obj = seed_track['artists'][0]
         nome_artista = artista_obj['name']
-        artista_info = sp.artist(artista_obj['id'])
-        
-        # Pega os gêneros associados ao artista no Spotify
-        generos = artista_info.get('genres', [])
         
         tracks_formatadas = []
         
-        # Cria buscas dinâmicas combinando o gênero e o artista de referência para evitar repetições
-        queries_possiveis = []
-        if generos:
-            genero_principal = generos[0]
-            queries_possiveis = [
-                f"genre:{genero_principal} indie",
-                f"artist:{nome_artista} alternative",
-                f"genre:{genero_principal} discovery"
-            ]
-        else:
-            queries_possiveis = [
-                f"artist:{nome_artista} discovery",
-                "indie alternative discovery",
-                "hidden gems underground"
-            ]
+        # Cria buscas altamente dinâmicas baseadas no nome da música e do artista escolhido
+        queries_possiveis = [
+            f"{nome_artista} {nome_seed}",
+            f"artist:{nome_artista} electronic OR rock OR pop",
+            f"track:{nome_seed}",
+            f"artist:{nome_artista} discovery"
+        ]
         
-        # Executa as buscas dinâmicas para povoar as recomendações
+        # Executa as buscas para povoar as recomendações de forma variada
         for q_query in queries_possiveis:
             if len(tracks_formatadas) >= limit + 5:
                 break
-            resultado_busca = sp.search(q=q_query, limit=10, type='track')
-            for item in resultado_busca['tracks']['items']:
-                # Evita duplicar a música seed, o mesmo artista principal ou músicas repetidas na lista
-                if item['id'] != seed_track_id and item['artists'][0]['id'] != artista_obj['id']:
-                    if not any(t['name'] == item['name'] for t in tracks_formatadas):
+            try:
+                resultado_busca = sp.search(q=q_query, limit=10, type='track')
+                items = resultado_busca.get('tracks', {}).get('items', [])
+                for item in items:
+                    # Evita duplicar a música seed, o mesmo artista principal ou músicas repetidas na lista
+                    if item['id'] != seed_track_id and item['artists'][0]['id'] != artista_obj['id']:
+                        if not any(t['name'] == item['name'] for t in tracks_formatadas):
+                            tracks_formatadas.append({
+                                'name': item['name'],
+                                'artists': item['artists'],
+                                'external_urls': item['external_urls'],
+                                'preview_url': item.get('preview_url'),
+                                'similarity_score': 0.91
+                            })
+            except Exception:
+                continue
+        
+        # Se a busca dinâmica trouxer poucos itens, faz um fallback complementar focado no artista
+        if len(tracks_formatadas) < limit:
+            try:
+                busca_extra = sp.search(q=f"artist:{nome_artista}", limit=limit + 5, type='track')
+                for item in busca_extra['tracks']['items']:
+                    if item['id'] != seed_track_id and not any(t['name'] == item['name'] for t in tracks_formatadas):
                         tracks_formatadas.append({
                             'name': item['name'],
                             'artists': item['artists'],
                             'external_urls': item['external_urls'],
                             'preview_url': item.get('preview_url'),
-                            'similarity_score': 0.92
+                            'similarity_score': 0.85
                         })
-        
-        # Se por acaso a busca estrita trouxer poucos itens, faz uma busca complementar de fallback
-        if len(tracks_formatadas) < limit:
-            busca_extra = sp.search(q=f"indie hidden gems {nome_artista}", limit=limit + 5, type='track')
-            for item in busca_extra['tracks']['items']:
-                if item['id'] != seed_track_id and not any(t['name'] == item['name'] for t in tracks_formatadas):
-                    tracks_formatadas.append({
-                        'name': item['name'],
-                        'artists': item['artists'],
-                        'external_urls': item['external_urls'],
-                        'preview_url': item.get('preview_url'),
-                        'similarity_score': 0.88
-                    })
+            except Exception:
+                pass
         
         # Limita à quantidade exata solicitada
         tracks_formatadas = tracks_formatadas[:limit]
