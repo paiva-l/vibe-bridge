@@ -30,7 +30,7 @@ if termo_busca:
             for t in tracks:
                 nome_musica = t['name']
                 artista = t['artists'][0]['name']
-                track_id = t['id'] # ID alfanumérico real do Spotify
+                track_id = t['id']
                 rotulo = f"{nome_musica} - {artista}"
                 opcoes_tracks[rotulo] = track_id
             
@@ -39,8 +39,12 @@ if termo_busca:
             seed_id = opcoes_tracks[musica_escolhida_rotulo]
             
             if st.button("Gerar Recomendações Acústicas 🚀", type="primary"):
-                with st.spinner("Consultando a API do Spotify e calculando recomendações..."):
-                    recs = obter_recomendacoes(seed_track_id=seed_id, limit=limite_recs)
+                # Guarda no session_state para manter a persistência após o clique
+                st.session_state['recs_data'] = obter_recomendacoes(seed_track_id=seed_id, limit=limite_recs)
+            
+            # Renderiza as recomendações se existirem no estado da sessão
+            if 'recs_data' in st.session_state and st.session_state['recs_data']:
+                recs = st.session_state['recs_data']
                 
                 st.markdown("---")
                 st.subheader(f"✨ Recomendações baseadas em: **{recs['seed_track']['name']}**")
@@ -71,4 +75,7 @@ if termo_busca:
         st.error(f"Erro ao comunicar com a API do Spotify. Verifique suas credenciais nos Secrets do Streamlit.\n\nDetalhes: {e}")
 
 else:
+    # Limpa o estado se a busca estiver vazia
+    if 'recs_data' in st.session_state:
+        del st.session_state['recs_data']
     st.info("💡 Digite o nome de uma música ou artista acima para começar a buscar.")
