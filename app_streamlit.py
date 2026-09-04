@@ -55,18 +55,25 @@ if termo_busca:
                 
                 st.markdown("### 🎧 Top Recomendações:")
                 
-                # Exibe cada música recomendada
+                # Exibe cada música recomendada com suporte ao st.audio
                 for i, rec in enumerate(recs["tracks"], 1):
                     nome = rec['name']
                     artista = rec['artists'][0]['name']
                     score = rec['similarity_score']
                     url_spotify = rec['external_urls']['spotify']
+                    preview_url = rec.get('preview_url')
                     
                     with st.container():
                         col1, col2 = st.columns([3, 1])
                         with col1:
                             st.markdown(f"**{i}. {nome}** — *{artista}*")
                             st.caption(f"Grau de Afinidade Acústica: **{score:.2f}**")
+                            
+                            if preview_url:
+                                st.audio(preview_url, format="audio/mp3")
+                            else:
+                                st.caption("🔇 Prévia de 30s indisponível no momento para esta faixa.")
+                                
                         with col2:
                             st.markdown(f"[▶ Abrir no Spotify]({url_spotify})")
                         st.divider()
